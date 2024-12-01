@@ -412,7 +412,7 @@ def get_icl_prompt_global_values(args, data, q_ID, demographic, wave, demographi
     prompt+="\n\nGiven the fields 'context` and `question`, produce the fields `answer`. Your task will not have `context`.\n\n------\n\n"
     
     # ICL Is all other question in the wave 
-     data_path = '{}/global_values/'.format(os.getcwd())
+    data_path = '{}/global_values/'.format(os.getcwd())
     f = open('{}/{}/{}_data.json'.format(data_path, wave, demographic_group))
     icl_data = json.load(f)
 
@@ -473,7 +473,7 @@ def get_few_shot_training_examples(
     demographic_group="POLPARTY",
     demographic="Democrat",
     output_type="model_logprobs",
-    dataset="opinionqa"
+    dataset="opinionqa",
     n_shots=5,
     n_simulations_per_shot=1,
     provide_ground_truth_distribution=False
@@ -486,7 +486,7 @@ def get_few_shot_training_examples(
         if wave == 'Pew_American_Trends_Panel_disagreement_100':
             icl_wave='Pew_American_Trends_Panel_disagreement_500'
         icl_data = json.load(open(data_path + icl_wave + '/' + demographic_group + "_data.json"))
-    elif dataset=='nytimes'
+    elif dataset=='nytimes':
         data_path = '{}/{}'.format(os.getcwd(), dataset)
         data = json.load(open(data_path + wave + '/' + demographic_group + "_data.json"))
         icl_data = data
