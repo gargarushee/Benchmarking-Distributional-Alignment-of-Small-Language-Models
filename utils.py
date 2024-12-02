@@ -554,7 +554,7 @@ def prepare_df(original_df, tokenizer):
     original_df['input'] = original_df.apply(apply_chat_template, axis=1)
     return original_df # do nothing, the task will be standard instruction tuning.
 
-def parse_answers(raw_response, available_choices):
+def parse_answers(raw_response, available_choices, answer_tag=True):
     """
     Parse the answers from a raw response string and calculate counts and probabilities.
 
@@ -569,9 +569,12 @@ def parse_answers(raw_response, available_choices):
                       or an error message if an error occurs.
     """
     try:
-        if "Answer:" not in raw_response:
+        if answer_tag and "Answer:" not in raw_response:
             raise ValueError("No 'Answer:' keyword found in input.")
-        answers_part = raw_response.split("Answer:")[1]
+        if answer_tag:
+            answers_part = raw_response.split("Answer:")[1]
+        else:
+            answers_part = raw_response.strip()
         answers_list = answers_part.strip().split()
         if not answers_list:
             raise ValueError("No parsable answers found in input.")
@@ -579,6 +582,7 @@ def parse_answers(raw_response, available_choices):
         total_answers = 0
 
         for answer in answers_list:
+            answer = answer.strip()
             if answer in available_choices:
                 counts[answer] += 1
                 total_answers += 1
@@ -597,26 +601,10 @@ def parse_answers(raw_response, available_choices):
     except Exception as e:
         return False, {"message": f"Unexpected error: {str(e)}"}
 
-def calculate_kld(golden_distribution, predicted_distribution):
+def calculate_l1(golden_distribution, predicted_distribution):
     golden_probs = np.array([golden_distribution[key] for key in golden_distribution])
     predicted_probs = np.array([predicted_distribution[key] for key in golden_distribution])
-    epsilon = 1e-12
-    golden_probs = np.clip(golden_probs, epsilon, 1)
-    predicted_probs = np.clip(predicted_probs, epsilon, 1)
-    kld = np.sum(golden_probs * np.log(golden_probs / predicted_probs))
-    return kld
+    return np.sum(np.abs(golden_probs - predicted_probs))
 
-def calculate_jsd(golden_distribution, predicted_distribution):
-    golden_probs = np.array([golden_distribution[key] for key in golden_distribution])
-    predicted_probs = np.array([predicted_distribution[key] for key in golden_distribution])
-    epsilon = 1e-12
-    golden_probs = np.clip(golden_probs, epsilon, 1)
-    predicted_probs = np.clip(predicted_probs, epsilon, 1)
-    m = 0.5 * (golden_probs + predicted_probs)
-    kl_golden_to_m = np.sum(golden_probs * np.log(golden_probs / m))
-    kl_predicted_to_m = np.sum(predicted_probs * np.log(predicted_probs / m))
-    jsd = 0.5 * (kl_golden_to_m + kl_predicted_to_m)
-    return jsd
-
-def compute_jsd_values(dist_pairs):
-    return [calculate_jsd(dist_pair[0], dist_pair[1]) for dist_pair in dist_pairs]
+def compute_l1_values(dist_pairs):
+    return [calculate_l1(dist_pair[0], dist_pair[1]) for dist_pair in dist_pairs]
