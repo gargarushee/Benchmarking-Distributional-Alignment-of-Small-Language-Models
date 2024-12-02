@@ -219,7 +219,7 @@ def get_icl_prompt_opinionqa(
     data_path = '{}/opinions_qa/data/human_resp/'.format(os.getcwd())
     demographic_in_prompt = demographic
     data = json.load(open(data_path + wave + '/' + demographic_group + "_data.json"))
-    
+    prompt = ''
     if output_type=='sequence':
         prompt+= 'Please simulate 30 samples from a group of {} for the question asked.Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
     elif output_type=='model_logprobs': 
