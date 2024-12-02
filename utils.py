@@ -283,8 +283,7 @@ def get_icl_prompt_opinionqa(
     return prompt
 
 # Get all in context learning prompts for dataset nytimes
-
-def get_icl_prompt_nytimes(args, model, data, q_ID, demographic, wave, demographic_group):
+def get_icl_prompt_nytimes(q_ID, wave, demographic_group, demographic, output_type):
     prompt_names = {"Republican" : 'a Republican person', "Democrat" : 'a Democrat person', "Male" : 'a man', "Female" : 'a woman'}
     if demographic in prompt_names.keys(): demographic_in_prompt = prompt_names[demographic]
     demographic_in_prompt = demographic
@@ -301,6 +300,7 @@ def get_icl_prompt_nytimes(args, model, data, q_ID, demographic, wave, demograph
 
     # ICL Is all other question in the wave 
     
+    data = json.load(open(data_path + wave + '/' + demographic_group + "_data.json"))
     icl_data = data
     data_path = '{}/nytimes/'.format(os.getcwd())
     ICL_qIDS = get_ICL_qIDs(icl_data, q_ID, wave, demographic, data_path, dataset='nytimes')
@@ -324,19 +324,19 @@ def get_icl_prompt_nytimes(args, model, data, q_ID, demographic, wave, demograph
             prompt+='\nQuestion: Given the information about this book, how likely is a {} to read it?\n'.format(demographic_in_prompt)
             for i, option in enumerate(MC_options):
                 prompt +="'{}'. {}\n".format(options[i], option)
-            if args.output_type=='sequence':
+            if output_type=='sequence':
                 # Generate 30 flips
                 try: 
                     flips = random.choices(all_options, probs, k=30)
                     prompt+="Answer: " + ' '.join(flips) + '\n\n------ '
                 except: prompt+=''
                 
-            elif args.output_type=='model_logprobs': 
+            elif output_type=='model_logprobs': 
                 try: 
                     flips = random.choices(all_options, probs, k=1)
                     prompt+="Answer: " + ' '.join(flips) + '\n\n------ '
                 except: prompt+=''
-            elif args.output_type=='express_distribution': 
+            elif output_type=='express_distribution': 
                 prompt +="Answer: {"
                 for i, prob in enumerate(probs):
                     prompt+="{}: '{}%', ".format(all_options[i], int(prob*100))
@@ -345,7 +345,7 @@ def get_icl_prompt_nytimes(args, model, data, q_ID, demographic, wave, demograph
     prompt+='\nYour turn! Please answer this question for the group of {}s. As a reminder, this group is the exact same group as the group in the previous examples. The previous examples are used to provide an example of formatting and to give you insight into how this group would respond to such questions.\n'.format(demographic_in_prompt)
 
 
-    if model == 'llama3-70b' and args.output_type=='model_logprobs': 
+    if model == 'llama3-70b' and output_type=='model_logprobs': 
         prompt=''
         for icl_qID in ICL_qIDS:
             if icl_qID != q_ID:
@@ -388,8 +388,13 @@ def get_icl_prompt_nytimes(args, model, data, q_ID, demographic, wave, demograph
             
     return prompt
 
+    q_ID, 
+    wave="Pew_American_Trends_Panel_disagreement_100", 
+    demographic_group="POLPARTY",
+    demographic="Democrat",
+    output_type="model_logprobs"
 
-def get_icl_prompt_global_values(args, data, q_ID, demographic, wave, demographic_group):
+def get_icl_prompt_global_values(q_ID, wave, demographic_group, demographic, output_type):
     demographic_in_prompt = demographic
     prompt = ''
 
@@ -421,9 +426,6 @@ def get_icl_prompt_global_values(args, data, q_ID, demographic, wave, demographi
             prompt += "\nContext: Let the probability that a {} responds to the following question with ".format(demographic_in_prompt)
             n = (sum(q_ID_data[icl_qID][demographic].values()))
             MC_options = list(q_ID_data[icl_qID][demographic].keys())
-            if shuffled_incontext_labels: 
-                random.seed(random.randint(1, 1000))
-                random.shuffle(MC_options)
             for i, option in enumerate(MC_options):
                 all_options.append(options[i])
                 probs.append(q_ID_data[icl_qID][demographic][option]/n)
@@ -431,19 +433,19 @@ def get_icl_prompt_global_values(args, data, q_ID, demographic, wave, demographi
             prompt+= "\nQuestion: " + q_ID_data[icl_qID]['question_text'] + "?\n"
             for i, option in enumerate(MC_options):
                 prompt +="'{}'. {}\n".format(options[i], option)
-            if args.output_type=='sequence':
+            if output_type=='sequence':
                 # Generate 30 flips
                 try: 
                     flips = random.choices(all_options, probs, k=30)
                     prompt+="Answer: " + ' '.join(flips) + '\n\n------ '
                 except: prompt+=''
                 
-            elif args.output_type=='model_logprobs': 
+            elif output_type=='model_logprobs': 
                 try: 
                     flips = random.choices(all_options, probs, k=1)
                     prompt+="Answer: " + ' '.join(flips) + '\n\n------ '
                 except: prompt+=''
-            elif args.output_type=='express_distribution': 
+            elif output_type=='express_distribution': 
                 prompt +="Answer: {"
                 for i, prob in enumerate(probs):
                     prompt+="'{}': '{}%', ".format(all_options[i], int(prob*100))
