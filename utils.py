@@ -222,6 +222,21 @@ def get_prompt_header(
     prompt+="\n\nGiven the `question`, produce the fields `answer`.\n\n------\n\n"
     return prompt
 
+def get_prompt_header_few_shot(
+    demographic_in_prompt, output_type
+):
+    prompt = "In this task you will receive information on the distribution of responses from a group of {}s to related survey questions. Given this data, your task is to simulate an answer to a new question from the group of {}s. ".format(demographic_in_prompt, demographic_in_prompt)
+    prompt+= "First, I will provide the distribution of responses from a group of {}s to a series of questions in a section titled 'Data'. Afterwards, I will provide 5 example responses to the question to help you understand the formatting of this task. ".format(demographic_in_prompt)
+
+    if output_type=='sequence':
+        prompt+= 'After the examples, please simulate 30 samples from a group of {} for the new question asked. Please only respond with 30 multiple choice answers, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted. For the new question, there will be no distribution provided, this is for you to estimate!'.format(demographic_in_prompt)
+    elif output_type=='model_logprobs': 
+        prompt += 'After the examples, please simulate an answer from a group of "{}" for the question asked. Please only respond with a single multiple choice answer, no extra spaces, characters, quotes or text. Please only produce 1 character. Answers with more than one characters will not be accepted. For the new question, there will be no distribution provided, this is for you to estimate!'.format(demographic_in_prompt)
+    elif output_type=='express_distribution': 
+        prompt += 'After the examples, please express the distribution of answers from a group of "{}" for the question asked. Please only respond in the exact format of a dictionary mapping answer choice letter to probability, no extra spaces, characters, quotes or text. Please only produce 1 sentence in this format. Answers outside of this format will not be accepted. For the new question, there will be no distribution provided, this is for you to estimate!'.format(demographic_in_prompt)
+
+    return prompt    
+
 # Get all in context learning prompts for dataset opinionqa
 def get_zeroshot_prompt_opinionqa(
     q_ID, 
@@ -251,7 +266,8 @@ def get_icl_prompt_opinionqa(
     data_path = '{}/opinions_qa/data/human_resp/'.format(os.getcwd())
     demographic_in_prompt = demographic
     data = json.load(open(data_path + wave + '/' + demographic_group + "_data.json"))
-    prompt = get_prompt_header(demographic_in_prompt, output_type)
+    prompt = get_prompt_header_few_shot(demographic_in_prompt, output_type)
+    prompt+="\n\nGiven the fields 'context` and `question`, produce the fields `answer`. Your task will not have `context`.\n\n------\n\n"
 
     # we need the larger set to get icl demos
     if wave == 'Pew_American_Trends_Panel_disagreement_100':
@@ -310,15 +326,7 @@ def get_icl_prompt_nytimes(q_ID, wave, demographic_group, demographic, output_ty
     prompt_names = {"Republican" : 'a Republican person', "Democrat" : 'a Democrat person', "Male" : 'a man', "Female" : 'a woman'}
     if demographic in prompt_names.keys(): demographic_in_prompt = prompt_names[demographic]
     demographic_in_prompt = demographic
-    prompt = ''
-
-    if output_type=='sequence':
-        prompt+= 'Please simulate 30 samples from a group of {} for the question asked.Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
-    elif output_type=='model_logprobs': 
-        prompt += 'Please simulate an answer from a group of "{}" for the question asked. Please only respond with a single multiple choice answer, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 character. Answers with more than one characters will not be accepted.'.format(demographic_in_prompt)
-    elif output_type=='express_distribution': 
-        prompt += 'Please express the distribution of answers from a group of "{}" for the question asked. Please only respond in the exact format of a dictionary mapping answer choice letter to probability, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 sentence in this format. Answers outside of this format will not be accepted.'.format(demographic_in_prompt)
-
+    prompt = get_prompt_header_few_shot(demographic_in_prompt, output_type)
     prompt+="\n\nGiven the fields `context`, `Book Title`, `Book Genre`, `Book Summary`, `question`, produce the fields `answer`.\n\n------\n\n"
 
     # ICL Is all other question in the wave 
@@ -381,17 +389,9 @@ def get_icl_prompt_nytimes(q_ID, wave, demographic_group, demographic, output_ty
 
 def get_icl_prompt_global_values(q_ID, wave, demographic_group, demographic, output_type):
     demographic_in_prompt = demographic
-    prompt = ''
+    prompt = get_prompt_header_few_shot(demographic_in_prompt, output_type)
+    prompt+="\n\nGiven the fields 'context` and `question`, produce the fields `answer`. Your task will not have `context`.\n\n------\n\n"
 
-    if output_type=='sequence':
-        prompt+= 'Please simulate 30 samples from a group of {} for the question asked.Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
-    elif output_type=='model_logprobs': 
-        prompt += 'Please simulate an answer from a group of "{}" for the question asked. Please only respond with a single multiple choice answer, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 character. Answers with more than one characters will not be accepted.'.format(demographic_in_prompt)
-    elif output_type=='express_distribution': 
-        prompt += 'Please express the distribution of answers from a group of "{}" for the question asked. Please only respond in the exact format of a dictionary mapping answer choice letter to probability, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 sentence in this format. Answers outside of this format will not be accepted.'.format(demographic_in_prompt)
-
-    prompt+="\n\nGiven the `question`, produce the fields `answer`.\n\n------\n\n"
-    
     # ICL Is all other question in the wave 
     data_path = '{}/global_values/'.format(os.getcwd())
     f = open('{}/{}/{}_data.json'.format(data_path, wave, demographic_group))
