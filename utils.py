@@ -208,7 +208,39 @@ def get_ICL_qIDs(q_ID, wave, demographic_group, demographic, dataset='opinionqa'
 
     return 
 
+def get_prompt_header(
+    demographic_in_prompt, output_type
+):
+    prompt = ''
+    if output_type=='sequence':
+        prompt+= 'Please simulate 30 samples from a group of {} for the question asked. Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
+    elif output_type=='model_logprobs': 
+        prompt += 'Please simulate an answer from a group of "{}" for the question asked. Please only respond with a single multiple choice answer, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 character. Answers with more than one characters will not be accepted.'.format(demographic_in_prompt)
+    elif output_type=='express_distribution': 
+        prompt += 'Please express the distribution of answers from a group of "{}" for the question asked. Please only respond in the exact format of a dictionary mapping answer choice letter to probability, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 sentence in this format. Answers outside of this format will not be accepted.'.format(demographic_in_prompt)
+
+    prompt+="\n\nGiven the `question`, produce the fields `answer`.\n\n------\n\n"
+    return prompt
+
 # Get all in context learning prompts for dataset opinionqa
+def get_zeroshot_prompt_opinionqa(
+    q_ID, 
+    wave="Pew_American_Trends_Panel_disagreement_500", 
+    demographic_group="POLPARTY",
+    demographic="Democrat",
+    output_type="model_logprobs"
+):
+    data_path = '{}/opinions_qa/data/human_resp/'.format(os.getcwd())
+    demographic_in_prompt = demographic
+    data = json.load(open(data_path + wave + '/' + demographic_group + "_data.json"))
+    prompt = get_prompt_header(demographic_in_prompt, output_type)
+
+    prompt+= "Question: " + data[q_ID]['question_text'] + "?\n"
+    for i, option in enumerate(list(data[q_ID][demographic].keys())):
+        prompt +="{}. {}. ".format(options[i], option)
+
+    return prompt
+
 def get_icl_prompt_opinionqa(
     q_ID, 
     wave="Pew_American_Trends_Panel_disagreement_100", 
@@ -219,15 +251,7 @@ def get_icl_prompt_opinionqa(
     data_path = '{}/opinions_qa/data/human_resp/'.format(os.getcwd())
     demographic_in_prompt = demographic
     data = json.load(open(data_path + wave + '/' + demographic_group + "_data.json"))
-    prompt = ''
-    if output_type=='sequence':
-        prompt+= 'Please simulate 30 samples from a group of {} for the question asked.Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
-    elif output_type=='model_logprobs': 
-        prompt += 'Please simulate an answer from a group of "{}" for the question asked. Please only respond with a single multiple choice answer, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 character. Answers with more than one characters will not be accepted.'.format(demographic_in_prompt)
-    elif output_type=='express_distribution': 
-        prompt += 'Please express the distribution of answers from a group of "{}" for the question asked. Please only respond in the exact format of a dictionary mapping answer choice letter to probability, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 sentence in this format. Answers outside of this format will not be accepted.'.format(demographic_in_prompt)
-
-    prompt+="\n\nGiven the `question`, produce the fields `answer`.\n\n------\n\n"
+    prompt = get_prompt_header(demographic_in_prompt, output_type)
 
     # we need the larger set to get icl demos
     if wave == 'Pew_American_Trends_Panel_disagreement_100':
@@ -248,7 +272,6 @@ def get_icl_prompt_opinionqa(
         for i, option in enumerate(MC_options):
             all_options.append(options[i])
             probs.append(icl_data[icl_qID][demographic][option]/n)
-            prompt +="{} be {}%, ".format(option, int((icl_data[icl_qID][demographic][option]/n)*100))
 
         prompt+= "\nQuestion: " + icl_data[icl_qID]['question_text'] + "?\n"
         for i, option in enumerate(MC_options):
@@ -451,16 +474,7 @@ def get_few_shot_training_examples(
         icl_data = data
 
     demographic_in_prompt = demographic
-    prompt = ''
-    
-    if output_type=='sequence':
-        prompt+= 'Please simulate 30 samples from a group of {} for the question asked.Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
-    elif output_type=='model_logprobs': 
-        prompt += 'Please simulate an answer from a group of "{}" for the question asked. Please only respond with a single multiple choice answer, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 character. Answers with more than one characters will not be accepted.'.format(demographic_in_prompt)
-    elif output_type=='express_distribution': 
-        prompt += 'Please express the distribution of answers from a group of "{}" for the question asked. Please only respond in the exact format of a dictionary mapping answer choice letter to probability, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 1 sentence in this format. Answers outside of this format will not be accepted.'.format(demographic_in_prompt)
-
-    prompt+="\n\nGiven the `question`, produce the fields `answer`.\n\n------\n\n"
+    prompt = get_prompt_header(demographic_in_prompt, output_type)
 
     # get icl qids
     ICL_qIDS = get_ICL_qIDs(
@@ -530,3 +544,79 @@ def get_test_questions_with_distributions(
             continue
         filtered_data[k] = v
     return filtered_data    
+
+def prepare_df(original_df, tokenizer):
+    def apply_chat_template(row):
+        messages = [{"role": "user", "content": row["input"]}]
+        nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+        return tokenizer.decode(nobos)
+    
+    original_df['input'] = original_df.apply(apply_chat_template, axis=1)
+    return original_df # do nothing, the task will be standard instruction tuning.
+
+def parse_answers(raw_response, available_choices):
+    """
+    Parse the answers from a raw response string and calculate counts and probabilities.
+
+    Args:
+        raw_response (str): The raw input string containing the answers.
+        available_choices (list): A list of valid answer choices (e.g., ["A", "B", "C", "D", "E", "F"]).
+
+    Returns:
+        tuple: (status, result)
+            - status (bool): True if successful, False if an error occurs.
+            - result: A dictionary containing counts and probabilities if successful,
+                      or an error message if an error occurs.
+    """
+    try:
+        if "Answer:" not in raw_response:
+            raise ValueError("No 'Answer:' keyword found in input.")
+        answers_part = raw_response.split("Answer:")[1]
+        answers_list = answers_part.strip().split()
+        if not answers_list:
+            raise ValueError("No parsable answers found in input.")
+        counts = {choice: 0 for choice in available_choices}
+        total_answers = 0
+
+        for answer in answers_list:
+            if answer in available_choices:
+                counts[answer] += 1
+                total_answers += 1
+            else:
+                # Skip invalid choices
+                pass
+        if total_answers < 3:
+            raise ZeroDivisionError("Not enough valid answers to calculate probabilities.")
+        probabilities = {choice: count / total_answers for choice, count in counts.items()}
+        return True, {"counts": counts, "probabilities": probabilities}
+
+    except ValueError as ve:
+        return False, {"message": str(ve)}
+    except ZeroDivisionError as zde:
+        return False, {"message": str(zde)}
+    except Exception as e:
+        return False, {"message": f"Unexpected error: {str(e)}"}
+
+def calculate_kld(golden_distribution, predicted_distribution):
+    golden_probs = np.array([golden_distribution[key] for key in golden_distribution])
+    predicted_probs = np.array([predicted_distribution[key] for key in golden_distribution])
+    epsilon = 1e-12
+    golden_probs = np.clip(golden_probs, epsilon, 1)
+    predicted_probs = np.clip(predicted_probs, epsilon, 1)
+    kld = np.sum(golden_probs * np.log(golden_probs / predicted_probs))
+    return kld
+
+def calculate_jsd(golden_distribution, predicted_distribution):
+    golden_probs = np.array([golden_distribution[key] for key in golden_distribution])
+    predicted_probs = np.array([predicted_distribution[key] for key in golden_distribution])
+    epsilon = 1e-12
+    golden_probs = np.clip(golden_probs, epsilon, 1)
+    predicted_probs = np.clip(predicted_probs, epsilon, 1)
+    m = 0.5 * (golden_probs + predicted_probs)
+    kl_golden_to_m = np.sum(golden_probs * np.log(golden_probs / m))
+    kl_predicted_to_m = np.sum(predicted_probs * np.log(predicted_probs / m))
+    jsd = 0.5 * (kl_golden_to_m + kl_predicted_to_m)
+    return jsd
+
+def compute_jsd_values(dist_pairs):
+    return [calculate_jsd(dist_pair[0], dist_pair[1]) for dist_pair in dist_pairs]
