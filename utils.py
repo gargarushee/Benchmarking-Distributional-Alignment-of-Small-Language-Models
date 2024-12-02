@@ -344,38 +344,6 @@ def get_icl_prompt_nytimes(q_ID, wave, demographic_group, demographic, output_ty
 
     prompt+='\nYour turn! Please answer this question for the group of {}s. As a reminder, this group is the exact same group as the group in the previous examples. The previous examples are used to provide an example of formatting and to give you insight into how this group would respond to such questions.\n'.format(demographic_in_prompt)
 
-
-    if model == 'llama3-70b' and output_type=='model_logprobs': 
-        prompt=''
-        for icl_qID in ICL_qIDS:
-            if icl_qID != q_ID:
-                
-                all_options, probs = [], []
-                prompt += "Let the probability that a {} responds to the following question with ".format(demographic_in_prompt)
-
-                MC_options = data[icl_qID]['MC_options']
-                n = (sum(data[icl_qID][demographic].values()))
-                
-                for i, option in enumerate(MC_options):
-                    if str(option) in data[icl_qID][demographic]: 
-                        all_options.append(options[i])
-                        probs.append(data[icl_qID][demographic][option]/n)
-                        prompt +="'{}' be {}%, ".format(option, int((data[icl_qID][demographic][option]/n)*100))
-                prompt+= ".\nBook Title: " + icl_qID 
-                prompt+= "\nBook Genre: " + data[icl_qID]['genre'] 
-                prompt+= "\nBook Summary: " + data[icl_qID]['summary'] 
-                prompt+='\nQuestion: Given the information about this book, how likely is a {} to read it?\n'.format(demographic_in_prompt)
-                for i, option in enumerate(MC_options):
-                    prompt +="'{}'. {}\n".format(options[i], option)
-                
-                try: 
-                    flips = random.choices(all_options, probs, k=1)
-                    prompt+="Answer: " + ' '.join(flips) + '\n'
-                except: prompt+=''
-                
-
-        prompt+='\nPlease answer this question for the group of {}s. \n'.format(demographic_in_prompt)
-
     prompt+= "\nBook Title: " + q_ID 
     prompt+= "\nBook Genre: " + data[q_ID]['genre'] 
     prompt+= "\nBook Summary: " + data[q_ID]['summary'] 
@@ -387,12 +355,6 @@ def get_icl_prompt_nytimes(q_ID, wave, demographic_group, demographic, output_ty
     prompt+="Answer:"
             
     return prompt
-
-    q_ID, 
-    wave="Pew_American_Trends_Panel_disagreement_100", 
-    demographic_group="POLPARTY",
-    demographic="Democrat",
-    output_type="model_logprobs"
 
 def get_icl_prompt_global_values(q_ID, wave, demographic_group, demographic, output_type):
     demographic_in_prompt = demographic
@@ -410,7 +372,7 @@ def get_icl_prompt_global_values(q_ID, wave, demographic_group, demographic, out
     # ICL Is all other question in the wave 
     data_path = '{}/global_values/'.format(os.getcwd())
     f = open('{}/{}/{}_data.json'.format(data_path, wave, demographic_group))
-    icl_data = json.load(f)
+    data = json.load(f)
 
     ICL_qIDS = get_ICL_qIDs(q_ID, wave, demographic, data_path)
     qID_to_wave = json.load(open('{}/qID_to_wave.json'.format(data_path)))
@@ -489,6 +451,7 @@ def get_few_shot_training_examples(
         icl_data = data
 
     demographic_in_prompt = demographic
+    prompt = ''
     
     if output_type=='sequence':
         prompt+= 'Please simulate 30 samples from a group of {} for the question asked.Please only respond with 30 multiple choice answers, no numbering, no new line, no extra spaces, characters, quotes or text. Please only produce 30 characters. Answers with more than 30 characters will not be accepted.'.format(demographic_in_prompt)    
