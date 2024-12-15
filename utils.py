@@ -554,12 +554,14 @@ def prepare_df(original_df, tokenizer):
     original_df['input'] = original_df.apply(apply_chat_template, axis=1)
     return original_df # do nothing, the task will be standard instruction tuning.
 
-def parse_answers(raw_response, available_choices, answer_tag=True):
+def parse_answers(raw_response, available_choices, answer_tag=True, output_type="sequence"):
     """
     Parse the answers from a raw response string and calculate counts and probabilities.
 
     Args:
-        raw_response (str): The raw input string containing the answers.
+        raw_response (str): The raw input string containing the answers. 
+        If output_type is "sequence", raw_response is a string. e.g. "A B C D E F"
+        If output_type is "express_distribution", raw_response is a dictionary. e.g. {"A": '12%', "B": '23%', "C": '34%'}
         available_choices (list): A list of valid answer choices (e.g., ["A", "B", "C", "D", "E", "F"]).
 
     Returns:
@@ -575,25 +577,30 @@ def parse_answers(raw_response, available_choices, answer_tag=True):
             answers_part = raw_response.split("Answer:")[1]
         else:
             answers_part = raw_response.strip()
-        answers_list = answers_part.strip().split()
-        if not answers_list:
-            raise ValueError("No parsable answers found in input.")
-        counts = {choice: 0 for choice in available_choices}
-        total_answers = 0
 
-        for answer in answers_list:
-            answer = answer.strip()
-            if answer in available_choices:
-                counts[answer] += 1
-                total_answers += 1
-            else:
-                # Skip invalid choices
-                pass
-        if total_answers < 3:
-            raise ZeroDivisionError("Not enough valid answers to calculate probabilities.")
-        probabilities = {choice: count / total_answers for choice, count in counts.items()}
-        return True, {"counts": counts, "probabilities": probabilities}
+        if output_type == "sequence":
+            answers_list = answers_part.strip().split()
+            if not answers_list:
+                raise ValueError("No parsable answers found in input.")
+            counts = {choice: 0 for choice in available_choices}
+            total_answers = 0
 
+            for answer in answers_list:
+                answer = answer.strip()
+                if answer in available_choices:
+                    counts[answer] += 1
+                    total_answers += 1
+                else:
+                    # Skip invalid choices
+                    pass
+            if total_answers < 3:
+                raise ZeroDivisionError("Not enough valid answers to calculate probabilities.")
+            probabilities = {choice: count / total_answers for choice, count in counts.items()}
+            return True, {"counts": counts, "probabilities": probabilities}
+        elif output_type == "express_distribution":
+            probabilities = {key: float(value.strip('%')) / 100 for key, value in raw_response.items()}
+            return True, {"probabilities": probabilities}
+            
     except ValueError as ve:
         return False, {"message": str(ve)}
     except ZeroDivisionError as zde:
